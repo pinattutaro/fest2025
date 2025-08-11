@@ -6,50 +6,46 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-aframe.prod.js"></script>
+    <!-- 先に core を読み込む -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image.prod.js"></script>
+    <!-- 次に A-Frame ラッパー -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
     <style>
-      body {
-        height: 50vh;
-      }
+      body { height: 50vh; }
     </style>
   </head>
   <body>
-    <mindar-image
-      mindar-image-target-src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@master/examples/image-targets/mind-ar-test.mind"
+    <!-- <mindar-image> ラッパーを廃止し、a-scene に mindar-image を付与 -->
+    <a-scene
+      mindar-image="imageTargetSrc: #targets; autoStart: false"
+      embedded
       color-space="sRGB"
       renderer="colorManagement: true, physicallyCorrectLights"
       vr-mode-ui="enabled: true"
       device-orientation-permission-ui="enabled: true"
-      auto-start="false"
     >
-      <a-scene
-        mindar-image-scene
-        embedded
-        color-space="sRGB"
-        renderer="colorManagement: true, physicallyCorrectLights"
-      >
-        <a-assets>
-          <!-- 必要なアセットがあればここに追加 -->
-        </a-assets>
+      <a-assets>
+        <a-asset-item
+          id="targets"
+          src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.1.4/examples/image-targets/mind-ar-test.mind">
+        </a-asset-item>
+      </a-assets>
 
-        <!-- マーカーを原点に変換するための構造 -->
-        <a-entity id="marker-root" mindar-image-target="targetIndex: 0">
-          <!-- この中が「AR空間の原点」として振る舞う -->
-          <a-entity id="world-anchor">
-            <!-- 原点に表示されるボックス -->
-            <a-box id="box" 
-                   position="0 0 0" 
-                   material="color: red; opacity: 1;" 
-                   scale="0.2 0.2 0.2"
-                   rotate-animation>
-            </a-box>
-            <a-entity axes-helper></a-entity>
-          </a-entity>
+      <!-- マーカーを原点に変換するための構造 -->
+      <a-entity id="marker-root" mindar-image-target="targetIndex: 0">
+        <a-entity id="world-anchor">
+          <a-box id="box" 
+                 position="0 0 0" 
+                 material="color: red; opacity: 1;" 
+                 scale="0.2 0.2 0.2"
+                 rotate-animation>
+          </a-box>
+          <a-entity axes-helper></a-entity>
         </a-entity>
+      </a-entity>
 
-        <a-camera id="ar-camera" position="0 0 0" look-controls="enabled: false"></a-camera>
-      </a-scene>
-    </mindar-image>
+      <a-camera id="ar-camera" position="0 0 0" look-controls="enabled: false"></a-camera>
+    </a-scene>
 
     <script>
       // 座標軸描画コンポーネント
@@ -66,20 +62,11 @@
 
       // 回転アニメーション
       AFRAME.registerComponent('rotate-animation', {
-        schema: {
-          speed: { type: 'number', default: 60 }
-        },
-        init: function () {
-          this.rotation = 0;
-        },
+        schema: { speed: { type: 'number', default: 60 } },
+        init: function () { this.rotation = 0; },
         tick: function (time, timeDelta) {
-          this.rotation += this.data.speed * (timeDelta / 1000);
-          this.rotation %= 360;
-          this.el.setAttribute('rotation', {
-            x: 0,
-            y: this.rotation,
-            z: 0
-          });
+          this.rotation = (this.rotation + this.data.speed * (timeDelta / 1000)) % 360;
+          this.el.setAttribute('rotation', { x: 0, y: this.rotation, z: 0 });
         }
       });
 
@@ -88,33 +75,58 @@
           'mediaDevices' in navigator &&
           'getUserMedia' in navigator.mediaDevices &&
           !!window.WebGLRenderingContext &&
-          window.isSecureContext // iOS含めHTTPS判定はこれが確実
+          window.isSecureContext
         );
       }
       console.log(isARjsSupported() ? "ARはこの端末で使えます！(HTTPS)" : "非HTTPSのためカメラが使えません。");
 
-      // 起動ボタンで開始（iOS対策）
+      // 起動ボタンで開始（iOS対策 + 初期化待ち）
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
-        const startBtn = document.getElementById('start-ar');
+        const overlay = document.getElementById('start-ar');
+        const startBtn = overlay.querySelector('button');
+        startBtn.disabled = true;
 
-        // ログ補助
+        const bindStartOnce = () => {
+          const startHandler = async () => {
+            try {
+              const arSystem = sceneEl.systems['mindar-image-system'];
+              if (!arSystem) throw new Error('MindAR system not ready (still undefined)');
+              await arSystem.start();
+              overlay.style.display = 'none';
+            } catch (e) {
+              console.error('Start failed:', e);
+              alert('カメラを開始できません: ' + (e?.message || e));
+            }
+          };
+          overlay.addEventListener('click', startHandler, { once: true });
+          startBtn.disabled = false;
+        };
+
+        // mindar-image コンポーネントの初期化を待つ
+        sceneEl.addEventListener('componentinitialized', (e) => {
+          if (e.detail.name === 'mindar-image') {
+            console.log('mindar-image initialized');
+            bindStartOnce();
+          }
+        });
+
+        // 既に初期化済みのレース対策
+        if (sceneEl.components['mindar-image']) {
+          console.log('mindar-image already initialized');
+          bindStartOnce();
+        }
+
         sceneEl.addEventListener('arReady', () => console.log('MindAR ready'));
         sceneEl.addEventListener('arError', (e) => console.error('MindAR error:', e.detail?.error || e));
 
-        startBtn.addEventListener('click', async () => {
-          try {
-            await sceneEl.systems['mindar-image-system'].start();
-            startBtn.style.display = 'none';
-          } catch (e) {
-            alert('カメラを開始できません: ' + e.message);
-            console.error(e);
-          }
+        // 画面が非表示になったらカメラ解放
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) sceneEl.systems['mindar-image-system']?.stop?.();
         });
       });
     </script>
 
-    <!-- 画面タップで起動するUI -->
     <style>
       #start-ar {
         position: fixed; inset: 0;
