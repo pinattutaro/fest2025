@@ -1,11 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>QRコードリーダー</title>
+    <style>
+        #reader {
+            width: 300px;
+            margin: auto;
+        }
+    </style>
 </head>
 <body>
-    this is a test document.
+    <h1>QRコードをスキャン</h1>
+    <div id="reader"></div>
+    <p>結果: <span id="result"></span></p>
+
+    <!-- ライブラリ読み込み -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script>
+        const resultElement = document.getElementById('result');
+
+        function onScanSuccess(decodedText, decodedResult) {
+            resultElement.textContent = decodedText;
+            html5QrcodeScanner.clear(); // スキャン停止（必要に応じて）
+        }
+
+        function onScanFailure(error) {
+        // console.log(`読み取り失敗: ${error}`);
+        }
+
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", 
+            { fps: 10, qrbox: 250 }, 
+            false
+        );
+
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        // スキャン開始   
+    </script>
 </body>
 </html>
