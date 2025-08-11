@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>MindAR A-Frame iOS対応サンプル</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      body { margin: 0; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <!-- mindar-image属性でターゲット指定 -->
+    <a-scene
+      mindar-image="imageTargetSrc: ./targets.mind;"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+      embedded
+    >
+      <!-- カメラ（iOS Safari用に facingMode 指定） -->
+      <a-entity camera position="0 0 0" look-controls
+        mindar-image-target="anchorIndex: 0">
+      </a-entity>
+
+      <!-- ターゲットに3Dオブジェクト配置 -->
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-box position="0 0.25 0" material="color: red;"></a-box>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
