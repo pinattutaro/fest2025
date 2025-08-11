@@ -1,31 +1,57 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8">
-    <title>MindAR A-Frame iOS対応サンプル</title>
-        <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
-    <style>
-      body { margin: 0; overflow: hidden; }
-    </style>
-  </head>
-  <body>
-    <!-- mindar-image属性でターゲット指定 -->
-    <a-scene
-      mindar-image="imageTargetSrc: ./targets.mind;"
-      vr-mode-ui="enabled: false"
-      device-orientation-permission-ui="enabled: false"
-      embedded
-    >
-      <!-- カメラ（iOS Safari用に facingMode 指定） -->
-      <a-entity camera position="0 0 0" look-controls
-        mindar-image-target="anchorIndex: 0">
-      </a-entity>
+<head>
+  <meta charset="UTF-8">
+  <title>MindAR iOS対応サンプル</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #container { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
 
-      <!-- ターゲットに3Dオブジェクト配置 -->
-      <a-entity mindar-image-target="targetIndex: 0">
-        <a-box position="0 0.25 0" material="color: red;"></a-box>
-      </a-entity>
-    </a-scene>
-  </body>
+  <script>
+    // iOS判定
+    const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent);
+
+    // MindAR 初期化
+    const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+      container: document.querySelector("#container"),
+      imageTargetSrc: "./targets.mind", // 自分のターゲットファイルに差し替え
+      uiScanning: true,
+      uiLoading: "読み込み中...",
+      // iOS Safari カメラ指定
+      videoSettings: { facingMode: "environment" }
+    });
+
+    const { renderer, scene, camera } = mindarThree;
+
+    // WebGL2非対応のiOSフォールバック
+    if (isIOS && !renderer.capabilities.isWebGL2) {
+      console.warn("iOS: WebGL2未対応 → WebGL1フォールバック");
+    }
+
+    // 3Dオブジェクト追加
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const material = new THREE.MeshNormalMaterial();
+    const cube = new THREE.Mesh(geometry, material);
+
+    const anchor = mindarThree.addAnchor(0);
+    anchor.group.add(cube);
+
+    // 実行
+    const start = async () => {
+      await mindarThree.start();
+      renderer.setAnimationLoop(() => {
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+        renderer.render(scene, camera);
+      });
+    };
+    start();
+  </script>
+</body>
 </html>
