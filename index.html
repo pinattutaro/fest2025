@@ -1,43 +1,122 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QRコードリーダー</title>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-aframe.prod.js"></script>
     <style>
-        #reader {
-            width: 300px;
-            margin: auto;
-        }
+      body {
+        height: 50vh;
+      }
     </style>
-</head>
-<body>
-    <h1>QRコードをスキャン</h1>
-    <div id="reader"></div>
-    <p>結果: <span id="result"></span></p>
+  </head>
+  <body>
+    <mindar-image
+      mindar-image-target-src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@master/examples/image-targets/mind-ar-test.mind"
+      color-space="sRGB"
+      renderer="colorManagement: true, physicallyCorrectLights"
+      vr-mode-ui="enabled: true"
+      device-orientation-permission-ui="enabled: true"
+      auto-start="true"
+    >
+      <a-scene
+        mindar-image-scene
+        embedded
+        color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights"
+      >
+        <a-assets>
+          <!-- 必要なアセットがあればここに追加 -->
+        </a-assets>
 
-    <!-- ライブラリ読み込み -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+        <!-- マーカーを原点に変換するための構造 -->
+        <a-entity id="marker-root" mindar-image-target="targetIndex: 0">
+          <!-- この中が「AR空間の原点」として振る舞う -->
+          <a-entity id="world-anchor">
+            <!-- 原点に表示されるボックス -->
+            <a-box id="box" 
+                   position="0 0 0" 
+                   material="color: red; opacity: 1;" 
+                   scale="0.2 0.2 0.2"
+                   rotate-animation>
+            </a-box>
+            <a-entity axes-helper></a-entity>
+          </a-entity>
+        </a-entity>
+
+        <a-camera id="ar-camera" position="0 0 0" look-controls="enabled: false"></a-camera>
+      </a-scene>
+    </mindar-image>
+
     <script>
-        const resultElement = document.getElementById('result');
-
-        function onScanSuccess(decodedText, decodedResult) {
-            resultElement.textContent = decodedText;
-            html5QrcodeScanner.clear(); // スキャン停止（必要に応じて）
+      // 座標軸描画コンポーネント
+      AFRAME.registerComponent('axes-helper', {
+        init: function () {
+          const helper = new THREE.AxesHelper(0.5);
+          helper.renderOrder = 999;
+          this.el.setObject3D('axesHelper', helper);
+        },
+        remove: function () {
+          this.el.removeObject3D('axesHelper');
         }
+      });
 
-        function onScanFailure(error) {
-        // console.log(`読み取り失敗: ${error}`);
+      // 回転アニメーション
+      AFRAME.registerComponent('rotate-animation', {
+        schema: {
+          speed: { type: 'number', default: 60 }
+        },
+        init: function () {
+          this.rotation = 0;
+        },
+        tick: function (time, timeDelta) {
+          this.rotation += this.data.speed * (timeDelta / 1000);
+          this.rotation %= 360;
+          this.el.setAttribute('rotation', {
+            x: 0,
+            y: this.rotation,
+            z: 0
+          });
         }
+      });
 
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader", 
-            { fps: 10, qrbox: 250 }, 
-            false
+      function isARjsSupported() {
+        return (
+          'mediaDevices' in navigator &&
+          'getUserMedia' in navigator.mediaDevices &&
+          !!window.WebGLRenderingContext &&
+          location.protocol === 'https:'
         );
+      }
+      console.log(isARjsSupported() ? "AR.jsはこの端末で使えます！" : "対応していません。");
 
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-        // スキャン開始   
+
+      // // マーカーをAR空間の原点にする処理
+      // AFRAME.registerComponent('marker-origin-shifter', {
+      //   init: function () {
+      //     this.marker = document.querySelector('#marker-root').object3D;
+      //     this.anchor = document.querySelector('#world-anchor').object3D;
+      //   },
+      //   tick: function () {
+      //     if (!this.marker.visible) return;
+
+      //     // マーカーのワールド行列の逆を取得
+      //     const inverseMatrix = new THREE.Matrix4().copy(this.marker.matrixWorld).invert();
+
+      //     // anchor に逆変換を適用して、マーカーを原点とみなす
+      //     this.anchor.matrix.identity();
+      //     this.anchor.applyMatrix4(inverseMatrix);
+      //     this.anchor.matrix.decompose(this.anchor.position, this.anchor.quaternion, this.anchor.scale);
+      //   }
+      // });
+
+      // // コンポーネント適用（起動時に追加）
+      // document.addEventListener('DOMContentLoaded', () => {
+      //   document.querySelector('a-scene').setAttribute('marker-origin-shifter', '');
+      // });
     </script>
-</body>
+  </body>
 </html>
