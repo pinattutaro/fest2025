@@ -6,24 +6,73 @@
     <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.1.4/dist/mindar-image-aframe.prod.js"></script>
   </head>
   <body>
-    <a-scene mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.1.4/examples/image-tracking/assets/card-example/card.mind;"
-             color-space="sRGB"
-             renderer="colorManagement: true, physicallyCorrectLights"
-             vr-mode-ui="enabled: false"
-             device-orientation-permission-ui="enabled: false">
-      <a-assets>
-        <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.1.4/examples/image-tracking/assets/card-example/card.png" />
-        <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.1.4/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
-      </a-assets>
+    <mindar-image
+      mindar-image-target-src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@master/examples/image-targets/mind-ar-test.mind"
+      color-space="sRGB"
+      renderer="colorManagement: true, physicallyCorrectLights"
+      vr-mode-ui="enabled: true"
+      device-orientation-permission-ui="enabled: true"
+      auto-start="true"
+    >
+      <a-scene
+        mindar-image-scene
+        embedded
+        color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights"
+      >
+        <a-assets>
+          <!-- 必要なアセットがあればここに追加 -->
+        </a-assets>
 
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <!-- マーカーを原点に変換するための構造 -->
+        <a-entity id="marker-root" mindar-image-target="targetIndex: 0">
+          <!-- この中が「AR空間の原点」として振る舞う -->
+          <a-entity id="world-anchor">
+            <!-- 原点に表示されるボックス -->
+            <a-box id="box" 
+                   position="0 0 0" 
+                   material="color: red; opacity: 1;" 
+                   scale="0.2 0.2 0.2"
+                   rotate-animation>
+            </a-box>
+            <a-entity axes-helper></a-entity>
+          </a-entity>
+        </a-entity>
 
-      <a-entity mindar-image-target="targetIndex: 0">
-        <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
-        <a-gltf-model rotation="0 0 0 " position="0 0 0.1" scale="0.005 0.005 0.005" src="#avatarModel"
-                      animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
-        </a-gltf-model>
-      </a-entity>
-    </a-scene>
+        <a-camera id="ar-camera" position="0 0 0" look-controls="enabled: false"></a-camera>
+      </a-scene>
+    </mindar-image>
   </body>
+    <script>
+      // 座標軸描画コンポーネント
+      AFRAME.registerComponent('axes-helper', {
+        init: function () {
+          const helper = new THREE.AxesHelper(0.5);
+          helper.renderOrder = 999;
+          this.el.setObject3D('axesHelper', helper);
+        },
+        remove: function () {
+          this.el.removeObject3D('axesHelper');
+        }
+      });
+
+      // 回転アニメーション
+      AFRAME.registerComponent('rotate-animation', {
+        schema: {
+          speed: { type: 'number', default: 60 }
+        },
+        init: function () {
+          this.rotation = 0;
+        },
+        tick: function (time, timeDelta) {
+          this.rotation += this.data.speed * (timeDelta / 1000);
+          this.rotation %= 360;
+          this.el.setAttribute('rotation', {
+            x: 0,
+            y: this.rotation,
+            z: 0
+          });
+        }
+      });
+    </script>
 </html>
