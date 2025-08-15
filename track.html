@@ -2,19 +2,18 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ブラウザで相対姿勢推定 (solvePnP)</title>
+  <title>リアルタイム姿勢推定クライアント</title>
   <style>
     video, canvas { display: block; margin: 0 auto; }
     #console {
-        display: inline-block;
-        width: 300px;
+        width: 400px;
         height: 100px;
         position: fixed;
         top: 0px;
         left: 0px;
-        background-color: rgba(0,0,0,0.5);
+        background-color: rgba(0, 0, 0, 0.5);
         color: white;
-        font-size: 10px;
+        font-family: monospace;
     }
   </style>
   <script src="https://docs.opencv.org/4.x/opencv.js"></script>
@@ -31,17 +30,18 @@
 
     let orb, bf;
     let firstKeypoints, firstDescriptors;
-    let first3DPoints; // 開始フレームの3D座標 (Z=0)
     let firstFrame = null;
 
-    let cameraMatrix, distCoeffs;
+    function round2(n) {
+      return Math.round((n + Number.EPSILON) * 100) / 100;
+    }
 
     async function initCamera() {
-    let stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: { ideal: "environment" } }
-    });
-    video.srcObject = stream;
-    return new Promise(res => video.onloadedmetadata = res);
+      });
+      video.srcObject = stream;
+      return new Promise(res => video.onloadedmetadata = res);
     }
 
     function initOpenCV() {
@@ -50,71 +50,51 @@
 
       firstKeypoints = new cv.KeyPointVector();
       firstDescriptors = new cv.Mat();
-      first3DPoints = [];
-
-      // 仮のカメラ内部パラメータ
-      let fx = 800, fy = 800, cx = 320, cy = 240;
-      cameraMatrix = cv.matFromArray(3, 3, cv.CV_64F, [
-        fx, 0, cx,
-        0, fy, cy,
-        0, 0, 1
-      ]);
-      distCoeffs = cv.Mat.zeros(4, 1, cv.CV_64F);
     }
 
-    function captureFirstFrame(mat) {
-      firstFrame = mat.clone();
+    function captureFirstFrame(gray) {
+      firstFrame = gray.clone();
       orb.detectAndCompute(firstFrame, new cv.Mat(), firstKeypoints, firstDescriptors);
-
-      // 平面上の3D座標を作る（Z=0、単位はピクセル）
-      first3DPoints = [];
-      for (let i = 0; i < firstKeypoints.size(); i++) {
-        let pt = firstKeypoints.get(i).pt;
-        first3DPoints.push(pt.x, pt.y, 0.0);
-      }
-
-      console.log("初期フレームキャプチャ完了、3D座標作成");
+      console.log("初期フレームキャプチャ完了");
     }
 
-    function processFrame(mat) {
+    function processFrame(gray) {
       if (!firstFrame) {
-        captureFirstFrame(mat);
+        captureFirstFrame(gray);
         return;
       }
 
       let kp = new cv.KeyPointVector();
       let des = new cv.Mat();
-      orb.detectAndCompute(mat, new cv.Mat(), kp, des);
+      orb.detectAndCompute(gray, new cv.Mat(), kp, des);
 
       let matches = new cv.DMatchVector();
       bf.match(firstDescriptors, des, matches);
 
-      let objectPoints = [], imagePoints = [];
+      let points1 = [], points2 = [];
       for (let i = 0; i < matches.size(); i++) {
         let m = matches.get(i);
-        let pt3 = first3DPoints.slice(m.queryIdx * 3, m.queryIdx * 3 + 3);
-        objectPoints.push(...pt3);
-
-        let pt2 = kp.get(m.trainIdx).pt;
-        imagePoints.push(pt2.x, pt2.y);
+        points1.push({ x: firstKeypoints.get(m.queryIdx).pt.x, y: firstKeypoints.get(m.queryIdx).pt.y });
+        points2.push({ x: kp.get(m.trainIdx).pt.x, y: kp.get(m.trainIdx).pt.y });
       }
 
-      if (objectPoints.length >= 4) {
-        let objMat = cv.matFromArray(objectPoints.length / 3, 3, cv.CV_64F, objectPoints);
-        let imgMat = cv.matFromArray(imagePoints.length / 2, 2, cv.CV_64F, imagePoints);
-
-        let rvec = new cv.Mat();
-        let tvec = new cv.Mat();
-
-        let success = cv.solvePnP(objMat, imgMat, cameraMatrix, distCoeffs, rvec, tvec, false, cv.SOLVEPNP_ITERATIVE);
-        if (success) {
-          console.log("回転ベクトル:", rvec.data64F);
-          console.log("並進ベクトル:", tvec.data64F);
-          document.getElementById('console').innerText = 
-            `回転ベクトル: ${rvec.data64F}\n並進ベクトル: ${tvec.data64F}`;
-        }
-
-        objMat.delete(); imgMat.delete(); rvec.delete(); tvec.delete();
+      if (points1.length >= 8) {
+        fetch("http://192.168.1.2:5000/pose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ points1, points2 })
+        })
+        .then(res => res.json())
+        .then(result => {
+          if(result.success === false){
+            console.warn(result.message);
+          } else {
+            console.log("回転行列:", result.R);
+            console.log("並進ベクトル:", result.t);
+            document.getElementById('console').innerText = `並進ベクトル:\n${(result.t).map(row => row.map(e => round2(e)))}\n回転行列:\n${(result.R).map(row => row.map(e => round2(e)))}`;
+          }
+        })
+        .catch(err => console.error(err));
       }
 
       kp.delete(); des.delete(); matches.delete();
@@ -127,6 +107,7 @@
 
       let gray = new cv.Mat();
       cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+
       processFrame(gray);
 
       gray.delete(); frame.delete();
