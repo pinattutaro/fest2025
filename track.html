@@ -37,7 +37,7 @@
     let cameraMatrix, distCoeffs;
 
     async function initCamera() {
-      let stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      let stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, facingMode: 'environment' });
       video.srcObject = stream;
       return new Promise(res => video.onloadedmetadata = res);
     }
