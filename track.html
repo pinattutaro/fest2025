@@ -2,11 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>カメラ姿勢推定</title>
+  <title>ブラウザで相対姿勢推定 (solvePnP)</title>
   <style>
     video, canvas { display: block; margin: 0 auto; }
   </style>
-  <!-- OpenCV.js を defer で先に読み込む -->
   <script src="https://docs.opencv.org/4.x/opencv.js"></script>
 </head>
 <body>
@@ -20,7 +19,9 @@
 
     let orb, bf;
     let firstKeypoints, firstDescriptors;
+    let first3DPoints; // 開始フレームの3D座標 (Z=0)
     let firstFrame = null;
+
     let cameraMatrix, distCoeffs;
 
     async function initCamera() {
@@ -35,7 +36,9 @@
 
       firstKeypoints = new cv.KeyPointVector();
       firstDescriptors = new cv.Mat();
+      first3DPoints = [];
 
+      // 仮のカメラ内部パラメータ
       let fx = 800, fy = 800, cx = 320, cy = 240;
       cameraMatrix = cv.matFromArray(3, 3, cv.CV_64F, [
         fx, 0, cx,
@@ -48,7 +51,15 @@
     function captureFirstFrame(mat) {
       firstFrame = mat.clone();
       orb.detectAndCompute(firstFrame, new cv.Mat(), firstKeypoints, firstDescriptors);
-      console.log("初期フレームキャプチャ完了");
+
+      // 平面上の3D座標を作る（Z=0、単位はピクセル）
+      first3DPoints = [];
+      for (let i = 0; i < firstKeypoints.size(); i++) {
+        let pt = firstKeypoints.get(i).pt;
+        first3DPoints.push(pt.x, pt.y, 0.0);
+      }
+
+      console.log("初期フレームキャプチャ完了、3D座標作成");
     }
 
     function processFrame(mat) {
@@ -64,30 +75,30 @@
       let matches = new cv.DMatchVector();
       bf.match(firstDescriptors, des, matches);
 
-      let points1 = [], points2 = [];
+      let objectPoints = [], imagePoints = [];
       for (let i = 0; i < matches.size(); i++) {
         let m = matches.get(i);
-        points1.push(firstKeypoints.get(m.queryIdx).pt);
-        points2.push(kp.get(m.trainIdx).pt);
+        let pt3 = first3DPoints.slice(m.queryIdx * 3, m.queryIdx * 3 + 3);
+        objectPoints.push(...pt3);
+
+        let pt2 = kp.get(m.trainIdx).pt;
+        imagePoints.push(pt2.x, pt2.y);
       }
 
-      if (points1.length >= 8) {
-        let pts1 = cv.matFromArray(points1.length, 2, cv.CV_64F, points1.flatMap(p => [p.x, p.y]));
-        let pts2 = cv.matFromArray(points2.length, 2, cv.CV_64F, points2.flatMap(p => [p.x, p.y]));
+      if (objectPoints.length >= 4) {
+        let objMat = cv.matFromArray(objectPoints.length / 3, 3, cv.CV_64F, objectPoints);
+        let imgMat = cv.matFromArray(imagePoints.length / 2, 2, cv.CV_64F, imagePoints);
 
-        let mask = new cv.Mat();
-        let E = cv.findEssentialMat(pts1, pts2, cameraMatrix, cv.RANSAC, 0.999, 1.0, mask);
-        let R = new cv.Mat();
-        let t = new cv.Mat();
-        let points = new cv.Mat();
+        let rvec = new cv.Mat();
+        let tvec = new cv.Mat();
 
-        if (!E.empty()) {
-          let inliers = cv.recoverPose(E, pts1, pts2, cameraMatrix, R, t, mask);
-          console.log("回転行列:", R.data64F);
-          console.log("並進ベクトル:", t.data64F);
+        let success = cv.solvePnP(objMat, imgMat, cameraMatrix, distCoeffs, rvec, tvec, false, cv.SOLVEPNP_ITERATIVE);
+        if (success) {
+          console.log("回転ベクトル:", rvec.data64F);
+          console.log("並進ベクトル:", tvec.data64F);
         }
 
-        pts1.delete(); pts2.delete(); mask.delete(); E.delete(); R.delete(); t.delete(); points.delete();
+        objMat.delete(); imgMat.delete(); rvec.delete(); tvec.delete();
       }
 
       kp.delete(); des.delete(); matches.delete();
@@ -106,7 +117,6 @@
       requestAnimationFrame(mainLoop);
     }
 
-    // OpenCV読み込み後に実行開始
     cv['onRuntimeInitialized'] = async () => {
       await initCamera();
       initOpenCV();
