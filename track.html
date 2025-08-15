@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>カメラ姿勢推定</title>
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <style>
+    video, canvas { display: block; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <video id="video" autoplay playsinline width="640" height="480"></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+
+  <script>
+    let video = document.getElementById('video');
+    let canvas = document.getElementById('canvas');
+    let ctx = canvas.getContext('2d');
+
+    let cap;
+    let orb, bf;
+    let firstKeypoints, firstDescriptors;
+    let firstFrame = null;
+    let cameraMatrix, distCoeffs;
+
+    async function initCamera() {
+      let stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      video.srcObject = stream;
+      return new Promise(res => video.onloadedmetadata = res);
+    }
+
+    function initOpenCV() {
+      orb = new cv.ORB();
+      bf = new cv.BFMatcher(cv.NORM_HAMMING, true);
+
+      firstKeypoints = new cv.KeyPointVector();
+      firstDescriptors = new cv.Mat();
+
+      // 仮のカメラ内部パラメータ（焦点距離=800px, 中心は画像中心）
+      let fx = 800, fy = 800, cx = 320, cy = 240;
+      cameraMatrix = cv.matFromArray(3, 3, cv.CV_64F, [
+        fx, 0, cx,
+        0, fy, cy,
+        0, 0, 1
+      ]);
+      distCoeffs = cv.Mat.zeros(4, 1, cv.CV_64F);
+    }
+
+    function captureFirstFrame(mat) {
+      firstFrame = mat.clone();
+      orb.detectAndCompute(firstFrame, new cv.Mat(), firstKeypoints, firstDescriptors);
+      console.log("初期フレームキャプチャ完了");
+    }
+
+    function processFrame(mat) {
+      if (!firstFrame) {
+        captureFirstFrame(mat);
+        return;
+      }
+
+      let kp = new cv.KeyPointVector();
+      let des = new cv.Mat();
+      orb.detectAndCompute(mat, new cv.Mat(), kp, des);
+
+      let matches = new cv.DMatchVector();
+      bf.match(firstDescriptors, des, matches);
+
+      let points1 = [], points2 = [];
+      for (let i = 0; i < matches.size(); i++) {
+        let m = matches.get(i);
+        points1.push(firstKeypoints.get(m.queryIdx).pt);
+        points2.push(kp.get(m.trainIdx).pt);
+      }
+
+      if (points1.length >= 8) {
+        let pts1 = cv.matFromArray(points1.length, 2, cv.CV_64F, points1.flatMap(p => [p.x, p.y]));
+        let pts2 = cv.matFromArray(points2.length, 2, cv.CV_64F, points2.flatMap(p => [p.x, p.y]));
+
+        let mask = new cv.Mat();
+        let E = cv.findEssentialMat(pts1, pts2, cameraMatrix, cv.RANSAC, 0.999, 1.0, mask);
+        let R = new cv.Mat();
+        let t = new cv.Mat();
+        let points = new cv.Mat();
+
+        if (!E.empty()) {
+          let inliers = cv.recoverPose(E, pts1, pts2, cameraMatrix, R, t, mask);
+          console.log("回転行列:", R.data64F);
+          console.log("並進ベクトル:", t.data64F);
+        }
+
+        pts1.delete(); pts2.delete(); mask.delete(); E.delete(); R.delete(); t.delete(); points.delete();
+      }
+
+      kp.delete(); des.delete(); matches.delete();
+    }
+
+    function mainLoop() {
+      let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+      ctx.drawImage(video, 0, 0, video.width, video.height);
+      frame.data.set(ctx.getImageData(0, 0, video.width, video.height).data);
+
+      let gray = new cv.Mat();
+      cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+      processFrame(gray);
+
+      gray.delete(); frame.delete();
+      requestAnimationFrame(mainLoop);
+    }
+
+    cv['onRuntimeInitialized'] = async () => {
+      await initCamera();
+      initOpenCV();
+      cap = new cv.VideoCapture(video);
+      mainLoop();
+    };
+  </script>
+</body>
+</html>
