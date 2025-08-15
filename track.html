@@ -5,10 +5,22 @@
   <title>ブラウザで相対姿勢推定 (solvePnP)</title>
   <style>
     video, canvas { display: block; margin: 0 auto; }
+    #console {
+        display: inline-block;
+        width: 300px;
+        height: 100px;
+        position: fixed;
+        top: 0px;
+        left: 0px;
+        background-color: rgba(0,0,0,0.5);
+        color: white;
+        font-size: 10px;
+    }
   </style>
   <script src="https://docs.opencv.org/4.x/opencv.js"></script>
 </head>
 <body>
+  <div id="console"></div>
   <video id="video" autoplay playsinline width="640" height="480"></video>
   <canvas id="canvas" width="640" height="480"></canvas>
 
@@ -96,6 +108,8 @@
         if (success) {
           console.log("回転ベクトル:", rvec.data64F);
           console.log("並進ベクトル:", tvec.data64F);
+          document.getElementById('console').innerText = 
+            `回転ベクトル: ${rvec.data64F}\n並進ベクトル: ${tvec.data64F}`;
         }
 
         objMat.delete(); imgMat.delete(); rvec.delete(); tvec.delete();
