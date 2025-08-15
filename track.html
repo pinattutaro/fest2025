@@ -7,13 +7,13 @@
     video, canvas { display: block; margin: 0 auto; }
   </style>
   <!-- OpenCV.js を defer で先に読み込む -->
-  <script defer src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://docs.opencv.org/4.x/opencv.js"></script>
 </head>
 <body>
   <video id="video" autoplay playsinline width="640" height="480"></video>
   <canvas id="canvas" width="640" height="480"></canvas>
 
-  <script defer>
+  <script>
     let video = document.getElementById('video');
     let canvas = document.getElementById('canvas');
     let ctx = canvas.getContext('2d');
