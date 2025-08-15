@@ -79,7 +79,7 @@
       }
 
       if (points1.length >= 8) {
-        fetch("http://192.168.1.2:5000/pose", {
+        fetch("https://192.168.1.2:5000/pose", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ points1, points2 })
