@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>リアルタイム姿勢推定クライアント</title>
   <style>
-    video, canvas { display: block; margin: 0 auto; }
+    #video, #canvas { display: none; margin: 0 auto; }
     #console {
         width: 400px;
         height: 100px;
@@ -17,11 +17,24 @@
     }
   </style>
   <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 </head>
 <body>
   <div id="console"></div>
   <video id="video" autoplay playsinline width="640" height="480"></video>
   <canvas id="canvas" width="640" height="480"></canvas>
+
+  <a-scene>
+    <!-- カメラエンティティ -->
+    <a-entity id="vrCamera" camera position="0 1.6 0"></a-entity>
+
+    <!-- 簡単なオブジェクト配置 -->
+    <a-box position="0 0 -3" rotation="0 45 0" color="red"></a-box>
+    <a-sphere position="2 1.5 -5" radius="1.25" color="skyblue"></a-sphere>
+    <a-cylinder position="-2 0.75 -4" radius="0.5" height="1.5" color="lime"></a-cylinder>
+    <a-plane position="0 -0.5 -4" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+  </a-scene>
+
 
   <script>
     let video = document.getElementById('video');
@@ -79,7 +92,7 @@
       }
 
       if (points1.length >= 8) {
-        fetch("https://8bbb0ef32660.ngrok-free.app/pose", {
+        fetch("https://6d5e951439fe.ngrok-free.app/pose", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ points1, points2 })
@@ -91,13 +104,26 @@
           } else {
             console.log("回転行列:", result.R);
             console.log("並進ベクトル:", result.t);
-            document.getElementById('console').innerText = `並進ベクトル:\n${(result.t).map(row => row.map(e => round2(e)))}\n回転行列:\n${(result.R).map(row => row.map(e => round2(e)))}`;
+            document.getElementById('console').innerText = `並進ベクトル:\n${(result.t).map(e => round2(e))}\n回転行列:\n${(result.R).map(e => round2(e))}`;
+            updateCamera(result.t, result.R);
           }
         })
         .catch(err => console.error(err));
       }
 
       kp.delete(); des.delete(); matches.delete();
+    }
+
+    async function updateCamera(t,R) {
+      const cam = document.getElementById("vrCamera");
+
+      // 並進ベクトル [x,y,z]
+      const [tx, ty, tz] = t;
+      cam.setAttribute("position", `${tx} ${ty} ${-tz}`);
+
+      // 回転 [roll, pitch, yaw] (deg)
+      const [roll, pitch, yaw] = R;
+      cam.setAttribute("rotation", `${roll} ${pitch} ${yaw}`);
     }
 
     function mainLoop() {
