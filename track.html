@@ -151,19 +151,24 @@
 
     let lastPos = {x:0, y:0, z:0};
     let lastRot = {x:0, y:0, z:0};
+    let fusedRot = {x:0, y:0, z:0};
     const alpha = 0.1; // 平滑化係数（0.0～1.0)
     const beta = 0.3;
 
     function smoothUpdate(tx, ty, tz, roll, pitch, yaw) {
-      // 位置補間
+      fusedRot.x = (1-beta)*roll + beta*sensorRotation.gamma;
+      fusedRot.y = (1-beta)*pitch + beta*sensorRotation.beta;
+      fusedRot.z = (1-beta)*yaw + beta*sensorRotation.alpha;
+
+      位置補間
       lastPos.x = lastPos.x * (1 - alpha) + tx * alpha;
       lastPos.y = lastPos.y * (1 - alpha) + ty * alpha;
       lastPos.z = lastPos.z * (1 - alpha) + (-tz) * alpha;
 
       // 回転補間
-      lastRot.x = lastRot.x * (1 - alpha) + roll * alpha;
-      lastRot.y = lastRot.y * (1 - alpha) + pitch * alpha;
-      lastRot.z = lastRot.z * (1 - alpha) + yaw * alpha;
+      lastRot.x = lastRot.x * (1 - alpha) + fusedRot.x * alpha;
+      lastRot.y = lastRot.y * (1 - alpha) + fusedRot.y * alpha;
+      lastRot.z = lastRot.z * (1 - alpha) + fusedRot.z * alpha;
 
       const cam = document.getElementById("vrCamera");
       cam.setAttribute("position", `${lastPos.x} ${lastPos.y} ${lastPos.z}`);
