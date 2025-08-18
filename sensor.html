@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>iOS VR-like View</title>
+  <title>iOS VR-like with Translation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 </head>
@@ -11,64 +11,90 @@
   <script>
     let scene, camera, renderer;
     let alpha=0, beta=0, gamma=0;
+    let velocity = {x:0, y:0, z:0};
+    let position = {x:0, y:1.6, z:0}; // 身長1.6m程度の初期位置
+    let lastTime = null;
 
     // Three.js 基本セットアップ
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.z = 0;
-
     renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // 簡単なVR空間（床とオブジェクト）
+    // 環境オブジェクト
     const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(50, 50),
-        new THREE.MeshBasicMaterial({color:0x444444, side:THREE.DoubleSide})
+      new THREE.PlaneGeometry(50,50),
+      new THREE.MeshBasicMaterial({color:0x444444, side:THREE.DoubleSide})
     );
     floor.rotation.x = -Math.PI/2;
     scene.add(floor);
 
-    for(let i=0;i<30;i++){
-        const box = new THREE.Mesh(
-            new THREE.BoxGeometry(1,1,1),
-            new THREE.MeshNormalMaterial()
-        );
-        box.position.set((Math.random()-0.5)*20, 0.5, (Math.random()-0.5)*20);
-        scene.add(box);
+    for(let i=0;i<50;i++){
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(1,1,1),
+        new THREE.MeshNormalMaterial()
+      );
+      box.position.set((Math.random()-0.5)*20, 0.5, (Math.random()-0.5)*20);
+      scene.add(box);
     }
 
-    // デバイスの回転を取得
+    // 姿勢（回転）
     function handleOrientation(event){
-        alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
-        beta  = event.beta  ? THREE.MathUtils.degToRad(event.beta)  : 0;
-        gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
+      alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
+      beta  = event.beta  ? THREE.MathUtils.degToRad(event.beta)  : 0;
+      gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
+    }
+
+    // 並進（加速度→速度→位置）
+    function handleMotion(event){
+      let now = performance.now();
+      if(lastTime===null){ lastTime = now; return; }
+      let dt = (now-lastTime)/1000;
+      lastTime = now;
+
+      let acc = event.acceleration;
+      if(acc && acc.x!==null){
+        // 簡易的にデバイス座標系の加速度をそのまま使う
+        velocity.x += acc.x * dt;
+        velocity.y += acc.y * dt;
+        velocity.z += acc.z * dt;
+
+        position.x += velocity.x * dt;
+        position.y += velocity.y * dt;
+        position.z += velocity.z * dt;
+      }
     }
 
     function animate(){
-        requestAnimationFrame(animate);
+      requestAnimationFrame(animate);
 
-        // デバイスの回転をカメラに反映
-        const euler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
-        camera.quaternion.setFromEuler(euler);
+      // 回転を反映
+      const euler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
+      camera.quaternion.setFromEuler(euler);
 
-        renderer.render(scene, camera);
+      // 並進を反映
+      camera.position.set(position.x, position.y, position.z);
+
+      renderer.render(scene, camera);
     }
 
-    // iOS Safari はユーザー操作で許可が必要
+    // 開始ボタン
     document.getElementById('startBtn').addEventListener('click', ()=>{
-        if(typeof DeviceOrientationEvent.requestPermission === 'function'){
-        DeviceOrientationEvent.requestPermission().then(state=>{
-            if(state==='granted'){
-                window.addEventListener('deviceorientation', handleOrientation, true);
-                animate();
-            }
-        });
-        }else{
+      if(typeof DeviceMotionEvent.requestPermission === 'function'){
+        DeviceMotionEvent.requestPermission().then(state=>{
+          if(state==='granted'){
             window.addEventListener('deviceorientation', handleOrientation, true);
+            window.addEventListener('devicemotion', handleMotion, true);
             animate();
-        }
-        document.getElementById('startBtn').style.display='none';
+          }
+        });
+      }else{
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        window.addEventListener('devicemotion', handleMotion, true);
+        animate();
+      }
+      document.getElementById('startBtn').style.display='none';
     });
   </script>
 </body>
