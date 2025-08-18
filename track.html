@@ -160,7 +160,7 @@
       fusedRot.y = (1-beta)*pitch + beta*sensorRotation.beta;
       fusedRot.z = (1-beta)*yaw + beta*sensorRotation.alpha;
 
-      位置補間
+      // 位置補間
       lastPos.x = lastPos.x * (1 - alpha) + tx * alpha;
       lastPos.y = lastPos.y * (1 - alpha) + ty * alpha;
       lastPos.z = lastPos.z * (1 - alpha) + (-tz) * alpha;
