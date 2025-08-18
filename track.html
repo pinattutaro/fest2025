@@ -92,7 +92,7 @@
       }
 
       if (points1.length >= 8) {
-        fetch("https://6d5e951439fe.ngrok-free.app/pose", {
+        fetch("https://05040fd5d9fc.ngrok-free.app/pose", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ points1, points2 })
@@ -114,16 +114,82 @@
       kp.delete(); des.delete(); matches.delete();
     }
 
-    async function updateCamera(t,R) {
+    let sensorRotation = { alpha:0, beta:0, gamma:0 };
+    let sensorAccel = { x:0, y:0, z:0 };
+
+    function handleOrientation(event) {
+      sensorRotation.alpha = event.alpha || 0; // Z軸（yaw）
+      sensorRotation.beta  = event.beta  || 0; // X軸（pitch）
+      sensorRotation.gamma = event.gamma || 0; // Y軸（roll）
+    }
+
+    function handleMotion(event) {
+      if (event.acceleration) {
+        sensorAccel.x = event.acceleration.x || 0;
+        sensorAccel.y = event.acceleration.y || 0;
+        sensorAccel.z = event.acceleration.z || 0;
+      }
+    }
+
+    async function enableSensors() {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const state = await DeviceOrientationEvent.requestPermission();
+          if (state === 'granted') {
+            window.addEventListener("deviceorientation", handleOrientation);
+            window.addEventListener("devicemotion", handleMotion);
+          }
+        } catch (err) {
+          console.error("センサー許可エラー:", err);
+        }
+      } else {
+        // iOS 13以前や非Safariブラウザ
+        window.addEventListener("deviceorientation", handleOrientation);
+        window.addEventListener("devicemotion", handleMotion);
+      }
+    }
+
+    let lastPos = {x:0, y:0, z:0};
+    let lastRot = {x:0, y:0, z:0};
+    const alpha = 0.1; // 平滑化係数（0.0～1.0)
+    const beta = 0.3;
+
+    function smoothUpdate(tx, ty, tz, roll, pitch, yaw) {
+      // 位置補間
+      lastPos.x = lastPos.x * (1 - alpha) + tx * alpha;
+      lastPos.y = lastPos.y * (1 - alpha) + ty * alpha;
+      lastPos.z = lastPos.z * (1 - alpha) + (-tz) * alpha;
+
+      // 回転補間
+      lastRot.x = lastRot.x * (1 - alpha) + roll * alpha;
+      lastRot.y = lastRot.y * (1 - alpha) + pitch * alpha;
+      lastRot.z = lastRot.z * (1 - alpha) + yaw * alpha;
+
+      const cam = document.getElementById("vrCamera");
+      cam.setAttribute("position", `${lastPos.x} ${lastPos.y} ${lastPos.z}`);
+      cam.setAttribute("rotation", `${lastRot.x} ${lastRot.y} ${lastRot.z}`);
+    }
+
+    function isJumpTooLarge(newVal, oldVal, threshold=0.5) {
+      return Math.abs(newVal - oldVal) > threshold;
+    }
+
+    function updateCamera(t,R) {
       const cam = document.getElementById("vrCamera");
 
       // 並進ベクトル [x,y,z]
-      const [tx, ty, tz] = t;
-      cam.setAttribute("position", `${tx} ${ty} ${-tz}`);
+      let [tx, ty, tz] = t;
+      threshold = 0.5; // 跳躍の閾値
+      tx = isJumpTooLarge(tx, lastPos.x, threshold) ? lastPos.x : tx;
+      ty = isJumpTooLarge(ty, lastPos.y, threshold) ? lastPos.y : ty;
+      tz = isJumpTooLarge(tz, lastPos.z, threshold) ? lastPos.z : tz;
+      // cam.setAttribute("position", `${tx} ${ty} ${-tz}`);
 
       // 回転 [roll, pitch, yaw] (deg)
       const [roll, pitch, yaw] = R;
-      cam.setAttribute("rotation", `${roll} ${pitch} ${yaw}`);
+      // cam.setAttribute("rotation", `${roll} ${pitch} ${yaw}`);
+
+      smoothUpdate(tx, ty, tz, roll, pitch, yaw);
     }
 
     function mainLoop() {
@@ -144,6 +210,7 @@
       await initCamera();
       initOpenCV();
       mainLoop();
+      await enableSensors();
     };
   </script>
 </body>
