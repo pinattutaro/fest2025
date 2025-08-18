@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        #console {
+            width: 100vw;
+            /* height: 100px; */
+            padding: 10px 0px;
+            position: fixed;
+            top: 0px;
+            left: 0px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="console"></div>
+    <script>
+        let pitch = 0, roll = 0, yaw = 0;
+        let lastTime = null;
+
+        window.addEventListener("devicemotion", (event) => {
+            const now = Date.now();
+            if (lastTime === null) {
+                lastTime = now;
+                return;
+            }
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            // ジャイロから角度変化 (deg/s → rad)
+            const gx = event.rotationRate.alpha * Math.PI / 180;
+            const gy = event.rotationRate.beta  * Math.PI / 180;
+            const gz = event.rotationRate.gamma * Math.PI / 180;
+
+            // 積分して回転更新
+            roll  += gx * dt;
+            pitch += gy * dt;
+            yaw   += gz * dt;
+
+            // 加速度から重力方向を推定
+            const ax = event.accelerationIncludingGravity.x;
+            const ay = event.accelerationIncludingGravity.y;
+            const az = event.accelerationIncludingGravity.z;
+            const accPitch = Math.atan2(ax, Math.sqrt(ay*ay + az*az));
+            const accRoll  = Math.atan2(ay, Math.sqrt(ax*ax + az*az));
+
+            // コンプリメンタリフィルタ (0.98:0.02 で混合)
+            const alpha = 0.98;
+            pitch = alpha * pitch + (1 - alpha) * accPitch;
+            roll  = alpha * roll  + (1 - alpha) * accRoll;
+
+            console.log("Pitch:", pitch, "Roll:", roll, "Yaw:", yaw);
+
+            document.getElementById('console').innerText = 
+                `aplpha: ${event.rotationRate.alpha.toFixed(2)}\n` +
+                `beta: ${event.rotationRate.beta.toFixed(2)}\n` +
+                `gamma: ${event.rotationRate.gamma.toFixed(2)}\n` +
+                `\n` +
+                `Pitch: ${round2(pitch * 180 / Math.PI)}°\n` +
+                `Roll: ${round2(roll * 180 / Math.PI)}°\n` +
+                `Yaw: ${round2(yaw * 180 / Math.PI)}°`;
+        });
+
+    </script>
+</body>
+</html>
